@@ -1,0 +1,4406 @@
+import asyncio
+import nest_asyncio  # <-- added
+
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+# Your bot token and other config
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'
+WALLET_ADDRESS = '6YyfK7W8GHSYdrKCtYQ9GbBEntSsmHHb9FWzcSvpijYk'
+QR_IMAGE_PATH = 'qr.png'  # Make sure this file exists
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with actual product URL
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Welcome! Send /buy to purchase.")
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    message = (
+        f"Send the payment to this wallet:\n\n`{WALLET_ADDRESS}`\n\n"
+        f"Pay $5\n\n"
+        f"Then type /confirm to receive the product."
+    )
+    try:
+        with open(QR_IMAGE_PATH, 'rb') as qr:
+            await update.message.reply_photo(photo=qr, caption=message, parse_mode='Markdown')
+    except FileNotFoundError:
+        await update.message.reply_text("QR code not found. Please contact support.")
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of the transaction here.\n\n"
+        "📨 You’ll receive your product link once the payment is confirmed."
+    )
+
+async def main():
+    print("Bot is running...")
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+
+    await app.run_polling()
+
+# PATCH the event loop BEFORE calling run_until_complete
+if __name__ == "__main__":
+    nest_asyncio.apply()  # <-- the key fix
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+
+
+#2
+
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+# CONFIG
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+
+
+# User payment status: user_id -> 'pending' or 'paid'
+user_status = {}
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 Welcome! Use /buy to get payment info and /confirm when you paid."
+    )
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet:\n"
+        f"`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_status[user_id] = 'pending'
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    status = user_status.get(user_id)
+    if status == 'paid':
+        await update.message.reply_text(
+            "✅ Payment confirmed! You already have the download link."
+        )
+    elif status == 'pending':
+        await update.message.reply_text(
+            "📥 Screenshot received! We will verify your payment manually."
+        )
+    else:
+        await update.message.reply_text(
+            "ℹ️ Please use /buy to get payment info first."
+        )
+
+
+# You can manually mark a user as paid by adding this helper function, e.g. for debugging:
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_status[user_id] = 'paid'
+    await update.message.reply_text(
+        f"🎉 You are now marked as paid!\n"
+        f"🔗 Download your product here:\n{PRODUCT_LINK}"
+    )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("paid", mark_paid))  # Manual "mark paid" command for yourself
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+
+#3
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+# CONFIG
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+
+
+# User payment status: user_id -> 'pending' or 'paid'
+user_status = {}
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 Welcome! Use /buy to get payment info."
+    )
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_status[user_id] = 'pending'
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    status = user_status.get(user_id)
+    if status == 'paid':
+        await update.message.reply_text(
+            "✅ Payment confirmed! You already have the download link."
+        )
+    elif status == 'pending':
+        await update.message.reply_text(
+            "📥 Screenshot received! We will verify your payment manually."
+        )
+    else:
+        await update.message.reply_text(
+            "ℹ️ Please use /buy to get payment info first."
+        )
+
+
+# You can manually mark a user as paid by adding this helper function, e.g. for debugging:
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_status[user_id] = 'paid'
+    await update.message.reply_text(
+        f"🎉 You are now marked as paid!\n"
+        f"🔗 Download your product here:\n{PRODUCT_LINK}"
+    )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("paid", mark_paid))  # Manual "mark paid" command for yourself
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+
+    #4
+    import nest_asyncio
+import qrcode
+from io import BytesIO
+import openpyxl
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+
+# CONFIG
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'  # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+# Initialize in-memory user status dictionary
+user_status = {}
+
+# Load or create Excel workbook and sheet
+def init_excel():
+    try:
+        wb = openpyxl.load_workbook(EXCEL_FILE)
+        sheet = wb.active
+    except FileNotFoundError:
+        wb = openpyxl.Workbook()
+        sheet = wb.active
+        sheet.append(['user_id', 'status'])  # header row
+        wb.save(EXCEL_FILE)
+    return wb, sheet
+
+wb, sheet = init_excel()
+
+def save_user_to_excel(user_id, status):
+    # Check if user already in excel; update status if yes, else append
+    for row in sheet.iter_rows(min_row=2, values_only=False):
+        if row[0].value == user_id:
+            row[1].value = status
+            wb.save(EXCEL_FILE)
+            return
+    sheet.append([user_id, status])
+    wb.save(EXCEL_FILE)
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    await update.message.reply_text(f"Your Telegram user ID is: {user_id}")
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_status[user_id] = 'pending'
+    save_user_to_excel(user_id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    status = user_status.get(user_id)
+    if status == 'paid':
+        await update.message.reply_text(
+            "✅ Payment confirmed! You already have the download link."
+        )
+    elif status == 'pending':
+        await update.message.reply_text(
+            "📥 Screenshot received! We will verify your payment manually."
+        )
+    else:
+        await update.message.reply_text(
+            "ℹ️ Please use /buy to get payment info first."
+        )
+
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    user_status[user_id] = 'paid'
+    save_user_to_excel(user_id, 'paid')
+    await update.message.reply_text(
+        f"🎉 You are now marked as paid!\n"
+        f"🔗 Download your product here:\n{PRODUCT_LINK}"
+    )
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("myid", myid))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("paid", mark_paid))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+    #5
+
+    import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# CONFIG
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'  # <-- Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    # Create headers
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'Screenshot', 'Status'])
+    wb.save(EXCEL_FILE)
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    # Append a new row for the user
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):  # iterate over cell objects, not values
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 Welcome! Use /buy to get payment info."
+    )
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    # Save user with 'pending' status on /buy
+    save_new_user(user.id, user.username or '', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    # Get file_id of the uploaded photo (take the highest res photo)
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+
+    # Update screenshot file_id in Excel
+    update_screenshot_file_id(user.id, file_id)
+
+    # Check status in Excel
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text(
+            "✅ Payment confirmed! You already have the download link."
+        )
+    elif status == 'pending':
+        await update.message.reply_text(
+            "📥 Screenshot received! We will verify your payment manually."
+        )
+    else:
+        await update.message.reply_text(
+            "ℹ️ Please use /buy to get payment info first."
+        )
+
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'paid')
+    await update.message.reply_text(
+        f"🎉 You are now marked as paid!\n"
+        f"🔗 Download your product here:\n{PRODUCT_LINK}"
+    )
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("paid", mark_paid))  # Manual "mark paid" command for yourself
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+    #6
+
+    import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================== CONFIG ==================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'  # <-- Replace with your bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+ADMIN_ID = 5928995459  # <-- Replace with YOUR Telegram user ID
+# ============================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    # Create headers
+    sheet.append(['UserID', 'Username', 'FullName', 'PaymentAmount', 'Screenshot', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, first_name, last_name, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, f"{first_name or ''} {last_name or ''}".strip(), payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[5].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    # Save user with more details
+    save_new_user(
+        user.id,
+        user.username or '',
+        user.first_name or '',
+        user.last_name or '',
+        EXPECTED_AMOUNT,
+        status='pending'
+    )
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[5].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the download link.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """This is the OLD self-mark command (if user types /paid)."""
+    user = update.effective_user
+    update_payment_status(user.id, 'paid')
+
+    await context.bot.send_message(
+        chat_id=user.id,
+        text=f"🎉 Your payment has been verified!\n🔗 Download your product here:\n{PRODUCT_LINK}"
+    )
+
+
+async def admin_mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin-only: /markpaid <user_id>"""
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        await update.message.reply_text("🚫 You are not authorized to use this command.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /markpaid <user_id>")
+        return
+
+    try:
+        target_user_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID.")
+        return
+
+    # Update Excel
+    update_payment_status(target_user_id, 'paid')
+
+    # Send product to the user
+    try:
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=f"🎉 Your payment has been verified!\n🔗 Download your product here:\n{PRODUCT_LINK}"
+        )
+        await update.message.reply_text(f"✅ User {target_user_id} has been marked as paid and product delivered.")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Could not deliver product to user {target_user_id}. Error: {e}")
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("paid", mark_paid))  # User self-mark (optional)
+    app.add_handler(CommandHandler("markpaid", admin_mark_paid))  # Admin manual mark
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+#6
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================== CONFIG ==================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'  # <-- Replace with your bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+ADMIN_ID = 5928995459  # <-- Replace with YOUR Telegram user ID
+# ============================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    # Create headers
+    sheet.append(['UserID', 'Username', 'FullName', 'PaymentAmount', 'Screenshot', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, first_name, last_name, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, f"{first_name or ''} {last_name or ''}".strip(), payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[5].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    # Save user with more details
+    save_new_user(
+        user.id,
+        user.username or '',
+        user.first_name or '',
+        user.last_name or '',
+        EXPECTED_AMOUNT,
+        status='pending'
+    )
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    # Forward screenshot to admin
+    await context.bot.forward_message(
+        chat_id=ADMIN_ID,  # Your Telegram ID
+        from_chat_id=update.message.chat_id,
+        message_id=update.message.message_id
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[5].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the download link.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Old self-mark command if user types /paid (not really needed now)."""
+    user = update.effective_user
+    update_payment_status(user.id, 'paid')
+
+    await context.bot.send_message(
+        chat_id=user.id,
+        text=f"🎉 Your payment has been verified!\n🔗 Download your product here:\n{PRODUCT_LINK}"
+    )
+
+
+async def admin_mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin-only: /markpaid <user_id>"""
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        await update.message.reply_text("🚫 You are not authorized to use this command.")
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /markpaid <user_id>")
+        return
+
+    try:
+        target_user_id = int(context.args[0])
+    except ValueError:
+        await update.message.reply_text("❌ Invalid user ID.")
+        return
+
+    # Update Excel
+    update_payment_status(target_user_id, 'paid')
+
+    # Send product to the user
+    try:
+        await context.bot.send_message(
+            chat_id=target_user_id,
+            text=f"🎉 Your payment has been verified!\n🔗 Download your product here:\n{PRODUCT_LINK}"
+        )
+        await update.message.reply_text(f"✅ User {target_user_id} has been marked as paid and product delivered.")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Could not deliver product to user {target_user_id}. Error: {e}")
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("paid", mark_paid))  # Optional for users
+    app.add_handler(CommandHandler("markpaid", admin_mark_paid))  # Admin-only
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+    #7
+
+    import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+    caption_text = f"📸 Screenshot from UserID: {user.id}\n👤 Username: {username_text}"
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the download link.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.effective_user.id) != str(ADMIN_ID):
+        await update.message.reply_text("⛔ You are not authorized to use this command.")
+        return
+
+    try:
+        user_id = int(context.args[0])
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: /markpaid <user_id>")
+        return
+
+    update_payment_status(user_id, 'paid')
+
+    await update.message.reply_text(f"✅ User {user_id} marked as paid.")
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=f"🎉 Your payment has been confirmed!\n🔗 Download your product here: {PRODUCT_LINK}"
+    )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("markpaid", mark_paid))  # Only admin can use
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+#8
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    # Caption now includes /markpaid ready-to-use command
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>\n\n"
+        f"👉 To mark as paid, copy this:\n/markpaid {user.id}"
+    )
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML"
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the download link.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.effective_user.id) != str(ADMIN_ID):
+        await update.message.reply_text("⛔ You are not authorized to use this command.")
+        return
+
+    try:
+        user_id = int(context.args[0])
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: /markpaid <user_id>")
+        return
+
+    update_payment_status(user_id, 'paid')
+
+    await update.message.reply_text(f"✅ User {user_id} marked as paid.")
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=f"🎉 Your payment has been confirmed!\n🔗 Download your product here: {PRODUCT_LINK}"
+    )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("markpaid", mark_paid))  # Only admin can use
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#10
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'https://yourdomain.com/product123.zip'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Add a button for admin to mark payment as paid
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}")]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the download link.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not query.data.startswith("markpaid:"):
+        return
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    user_id = int(query.data.split(":")[1])
+    update_payment_status(user_id, 'paid')
+
+    # Notify admin
+    await query.edit_message_caption(
+        caption=f"✅ User {user_id} marked as paid."
+    )
+
+    # Notify user
+    await context.bot.send_message(
+        chat_id=user_id,
+        text=f"🎉 Your payment has been confirmed!\n🔗 Download your product here: {PRODUCT_LINK}"
+    )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+#11
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_LINK = 'OnlyFans Mod.apk'  # Replace with your product URL
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the download link when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the download link.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=f"🎉 Your payment has been confirmed!\n🔗 Download your product here: {PRODUCT_LINK}"
+        )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+#12
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+APK_FILE = "OnlyFans Mod.apk"   # <--- Put your .apk file in the same folder as this script
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n"
+        "⏳ We will verify your payment manually and send the app when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+    caption_text = (
+        f"📸 Screenshot from UserID: {user.id}\n"
+        f"👤 Username: {username_text}\n\n"
+        f"👉 /markpaid {user.id}"
+    )
+
+    # Send screenshot to ADMIN with /markpaid command hint
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already received the app.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def mark_paid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.effective_user.id) != str(ADMIN_ID):
+        await update.message.reply_text("⛔ You are not authorized to use this command.")
+        return
+
+    try:
+        user_id = int(context.args[0])
+    except (IndexError, ValueError):
+        await update.message.reply_text("Usage: /markpaid <user_id>")
+        return
+
+    update_payment_status(user_id, 'paid')
+
+    await update.message.reply_text(f"✅ User {user_id} marked as paid.")
+
+    # Send the APK file directly to user
+    try:
+        await context.bot.send_document(
+            chat_id=user_id,
+            document=open(APK_FILE, "rb"),
+            caption="📲 Thank you! Here is your app."
+        )
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ Failed to send APK: {e}")
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(CommandHandler("markpaid", mark_paid))  # Only admin can use
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#13
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        # Send APK file directly
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file."
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+    #14
+
+    import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        # Send APK file directly (with timeout fix)
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    read_timeout=120
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+    #15
+
+    import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        # Send APK file directly with longer timeout
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file."
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    # Add global timeouts to prevent "timed out" error
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+#16
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(photo=InputFile(bio), caption=msg, parse_mode="Markdown")
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        # Send APK file directly
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file."
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+
+#16
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address (tap below to copy):\n`{WALLET_ADDRESS}`\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    # Add "Copy Address" button
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Copy Wallet Address", switch_inline_query=WALLET_ADDRESS)]
+    ])
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        # Send APK file directly with extended timeout
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=60,
+                    connect_timeout=60,
+                    read_timeout=60,
+                    pool_timeout=60
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#16
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address:\n`{WALLET_ADDRESS}`\n\n"
+        f"Tap the button below to quickly copy.\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    # FIXED: Copy button puts wallet into input field (no bot name)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Copy Wallet Address", switch_inline_query_current_chat=WALLET_ADDRESS)]
+    ])
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="Markdown",
+        reply_markup=keyboard
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Only admin can mark payments
+    if ":" not in query.data:
+        return
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        # Send APK file directly with extended timeout
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    connect_timeout=120,
+                    read_timeout=120,
+                    pool_timeout=120
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#18
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address:\n<code>{WALLET_ADDRESS}</code>\n\n"
+        f"Tap the button below to quickly copy.\n\n"
+        f"Then type /confirm to notify us."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    # FIXED: Only copies wallet address (no bot name, no extra text)
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📋 Copy Wallet Address", switch_inline_query=WALLET_ADDRESS)]
+    ])
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    # Buttons for admin (Approve or Reject)
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    # Send screenshot to ADMIN
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Only admin can mark payments
+    if ":" not in query.data:
+        return
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        # Send APK file directly with extended timeout
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    connect_timeout=120,
+                    read_timeout=120,
+                    pool_timeout=120
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#18
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address (hold to copy):\n<code>{WALLET_ADDRESS}</code>\n\n"
+        f"📷 Scan the QR code below or copy the address above.\n\n"
+        f"After payment, type /confirm and send your screenshot."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="HTML"
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if ":" not in query.data:
+        return
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    connect_timeout=120,
+                    read_timeout=120,
+                    pool_timeout=120
+                )
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#19
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address (hold to copy):\n<code>{WALLET_ADDRESS}</code>\n\n"
+        f"📷 Scan the QR code below or copy the address above.\n\n"
+        f"After payment, type /confirm and send your screenshot."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="HTML"
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if ":" not in query.data:
+        return
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    connect_timeout=120,
+                    read_timeout=120,
+                    pool_timeout=120
+                )
+
+            # ✅ Notify admin that APK was delivered (only user ID)
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"{user_id}"
+            )
+
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#19
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address (hold to copy):\n<code>{WALLET_ADDRESS}</code>\n\n"
+        f"📷 Scan the QR code below or copy the address above.\n\n"
+        f"After payment, type /confirm and send your screenshot."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="HTML"
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if ":" not in query.data:
+        return
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    connect_timeout=120,
+                    read_timeout=120,
+                    pool_timeout=120
+                )
+
+            # ✅ Notify admin that APK was delivered with message
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"App delivered to UserID {user_id}"
+            )
+
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+ 
+#20
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = 'TNH9tQy2UAipH9ECQDaHPkAA13Np2nS5bV'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address (hold to copy):\n<code>{WALLET_ADDRESS}</code>\n\n"
+        f"📷 Scan the QR code below or copy the address above.\n\n"
+        f"After payment, type /confirm and send your screenshot."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="HTML"
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if ":" not in query.data:
+        return
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    connect_timeout=120,
+                    read_timeout=120,
+                    pool_timeout=120
+                )
+
+            # ✅ Notify admin that APK was delivered with UserID in blue
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"App delivered to User <code>{user_id}</code>",
+                parse_mode="HTML"
+            )
+
+
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
+#20
+
+import nest_asyncio
+import qrcode
+from io import BytesIO
+from telegram import Update, InputFile
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    CallbackQueryHandler,
+    filters,
+)
+from openpyxl import Workbook, load_workbook
+
+# ================= CONFIG =================
+BOT_TOKEN = '8481478480:AAGwfS9t9jb-9qoVsjdRq0mWvvdH7PNoOQM'   # Replace with your actual bot token
+WALLET_ADDRESS = '6YyfK7W8GHSYdrKCtYQ9GbBEntSsmHHb9FWzcSvpijYk'
+PRODUCT_FILE = 'OnlyFans Mod.apk'   # Your APK file path (same folder as script)
+EXPECTED_AMOUNT = 3.0
+EXCEL_FILE = 'user_data.xlsx'
+
+ADMIN_ID = 5928995459   # <<< Replace with YOUR Telegram User ID
+# ==========================================
+
+# Setup Excel workbook and sheet
+try:
+    wb = load_workbook(EXCEL_FILE)
+    sheet = wb.active
+except FileNotFoundError:
+    wb = Workbook()
+    sheet = wb.active
+    sheet.append(['UserID', 'Username', 'PaymentAmount', 'ScreenshotFileID', 'Status'])
+    wb.save(EXCEL_FILE)
+
+
+def save_new_user(user_id, username, payment_amount, screenshot_file_id=None, status='pending'):
+    sheet.append([user_id, username, payment_amount, screenshot_file_id, status])
+    wb.save(EXCEL_FILE)
+
+
+def update_payment_status(user_id, new_status):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[4].value = new_status
+            wb.save(EXCEL_FILE)
+            break
+
+
+def update_screenshot_file_id(user_id, file_id):
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user_id:
+            row[3].value = file_id
+            wb.save(EXCEL_FILE)
+            break
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 Welcome! Use /buy to get payment info.")
+
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    payment_uri = f"tron:{WALLET_ADDRESS}?amount={EXPECTED_AMOUNT}"
+    msg = (
+        f"💸 Send **${EXPECTED_AMOUNT} USDT (TRC20)** to this wallet\n\n"
+        f"📌 Public Address (hold to copy):\n<code>{WALLET_ADDRESS}</code>\n\n"
+        f"📷 Scan the QR code below or copy the address above.\n\n"
+        f"After payment, type /confirm and send your screenshot."
+    )
+
+    qr = qrcode.make(payment_uri)
+    bio = BytesIO()
+    bio.name = "tron_qr.png"
+    qr.save(bio, format="PNG")
+    bio.seek(0)
+
+    save_new_user(user.id, user.username or 'No username', EXPECTED_AMOUNT, status='pending')
+
+    await update.message.reply_photo(
+        photo=InputFile(bio),
+        caption=msg,
+        parse_mode="HTML"
+    )
+
+
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    update_payment_status(user.id, 'pending')
+    await update.message.reply_text(
+        "📸 Please upload a screenshot of your transaction.\n\n"
+        "⏳ We will verify your payment manually and send the APK when ready."
+    )
+
+
+async def handle_screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    if not update.message.photo:
+        await update.message.reply_text("Please send a valid photo.")
+        return
+
+    file_id = update.message.photo[-1].file_id
+    update_screenshot_file_id(user.id, file_id)
+
+    username_text = f"@{user.username}" if user.username else "No username"
+
+    caption_text = (
+        f"📸 Screenshot received\n\n"
+        f"👤 Username: {username_text}\n"
+        f"🆔 UserID: <code>{user.id}</code>"
+    )
+
+    from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Mark as Paid", callback_data=f"markpaid:{user.id}"),
+            InlineKeyboardButton("❌ Reject Payment", callback_data=f"reject:{user.id}")
+        ]
+    ])
+
+    await context.bot.send_photo(
+        chat_id=ADMIN_ID,
+        photo=file_id,
+        caption=caption_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    status = None
+    for row in sheet.iter_rows(min_row=2):
+        if row[0].value == user.id:
+            status = row[4].value
+            break
+
+    if status == 'paid':
+        await update.message.reply_text("✅ Payment confirmed! You already have the APK.")
+    elif status == 'pending':
+        await update.message.reply_text("📥 Screenshot received! We will verify your payment manually.")
+    else:
+        await update.message.reply_text("ℹ️ Please use /buy to get payment info first.")
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if ":" not in query.data:
+        return
+
+    action, user_id_str = query.data.split(":")
+    user_id = int(user_id_str)
+
+    if str(query.from_user.id) != str(ADMIN_ID):
+        await query.edit_message_caption(
+            caption="⛔ You are not authorized to perform this action."
+        )
+        return
+
+    if action == "markpaid":
+        update_payment_status(user_id, 'paid')
+
+        await query.edit_message_caption(
+            caption=f"✅ User {user_id} marked as paid."
+        )
+
+        try:
+            with open(PRODUCT_FILE, "rb") as f:
+                await context.bot.send_document(
+                    chat_id=user_id,
+                    document=InputFile(f, filename=PRODUCT_FILE),
+                    caption="🎉 Your payment has been confirmed!\n📲 Here is your APK file.",
+                    write_timeout=120,
+                    connect_timeout=120,
+                    read_timeout=120,
+                    pool_timeout=120
+                )
+
+            # ✅ Notify admin that APK was delivered with UserID in blue
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"App delivered to User <code>{user_id}</code>",
+                parse_mode="HTML"
+            )
+
+
+        except Exception as e:
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=f"⚠️ Failed to send APK to user {user_id}: {e}"
+            )
+
+    elif action == "reject":
+        update_payment_status(user_id, 'rejected')
+
+        await query.edit_message_caption(
+            caption=f"❌ User {user_id}'s payment has been rejected."
+        )
+
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="⚠️ Your payment was not verified. Please try again or contact support."
+        )
+
+
+async def main():
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("buy", buy))
+    app.add_handler(CommandHandler("confirm", confirm))
+    app.add_handler(MessageHandler(filters.PHOTO & (~filters.COMMAND), handle_screenshot))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ Bot starting...")
+    await app.run_polling()
+
+
+if __name__ == "__main__":
+    nest_asyncio.apply()
+    import asyncio
+    asyncio.get_event_loop().run_until_complete(main())
+
+
