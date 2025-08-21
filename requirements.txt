@@ -4,3 +4,5 @@ flask==2.3.3                    # Lightweight web server (for webhook mode)
 aiohttp==3.9.2                   # Async HTTP requests, used by some bots
 python-dotenv==1.0.1             # Load environment variables from .env file
 pyyaml==6.0                      # For config files (optional)
+nest_asyncio==1.5.7
+openpyxl==3.1.2
