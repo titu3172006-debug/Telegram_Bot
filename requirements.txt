@@ -1,0 +1,6 @@
+python-telegram-bot==20.7       # Telegram bot library
+requests==2.31.0                # For making HTTP requests
+flask==2.3.3                    # Lightweight web server (for webhook mode)
+aiohttp==3.9.2                   # Async HTTP requests, used by some bots
+python-dotenv==1.0.1             # Load environment variables from .env file
+pyyaml==6.0                      # For config files (optional)
